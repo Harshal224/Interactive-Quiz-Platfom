@@ -3,6 +3,8 @@ import './quiz1.css';
 import { QuizData } from './QuizData';
 import QuizResult from './QuizResult';
 import { openDB } from 'idb';
+import { useCallback } from 'react';
+
 
 // Initialize IndexedDB for storing past quiz scores
 const initDB = async () => {
@@ -37,23 +39,24 @@ const Quiz = () => {
   const [pastScores, setPastScores] = useState([]);
   const [answerChecked, setAnswerChecked] = useState(false); // Prevents multiple selections
 
-  const changeQuestion = () => {
-    if (!answerChecked) return; // Prevent skipping without answering
 
-    updateScore();
-
+  const changeQuestion = useCallback(() => {
+    if (clickedOption !== null) {
+      updateScore();
+    }
+  
     if (currentQuestion < QuizData.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setClickedOption(null);
-      setIntegerAnswer("");
       setTimeLeft(30);
       setAnswerChecked(false);
     } else {
       setShowResult(true);
-      saveScore(score + (checkAnswer() ? 1 : 0), QuizData.length);
+      saveScore(score + (clickedOption === QuizData[currentQuestion].answer ? 1 : 0), QuizData.length);
     }
-  };
-
+  }, [clickedOption, currentQuestion, score]);  
+  
+  
   useEffect(() => {
     if (timeLeft === 0) {
       changeQuestion();
@@ -65,6 +68,7 @@ const Quiz = () => {
   
     return () => clearInterval(timer);
   }, [timeLeft, changeQuestion]);  
+  
   
 
   useEffect(() => {
