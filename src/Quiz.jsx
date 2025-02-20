@@ -15,81 +15,84 @@ const initDB = async () => {
   });
 };
 
-// Save Score to IndexedDB
+// Save Score to DB
 const saveScore = async (score, totalScore) => {
   const db = await initDB();
   await db.add('quizHistory', { score, totalScore, date: new Date().toLocaleString() });
 };
 
-// Retrieve Past Scores
+// Get past scores from DB
 const getPastScores = async () => {
   const db = await initDB();
   return await db.getAll('quizHistory');
+};
+
+// Delete past scores manually
+const clearPastScores = async () => {
+  const db = await initDB();
+  await db.clear('quizHistory');
 };
 
 const Quiz = () => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [clickedOption, setClickedOption] = useState(null);
-  const [integerAnswer, setIntegerAnswer] = useState(""); // For integer questions
+  const [integerAnswer, setIntegerAnswer] = useState("");
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [pastScores, setPastScores] = useState([]);
   const [answerChecked, setAnswerChecked] = useState(false);
+  const [scoreUpdated, setScoreUpdated] = useState(false); // ✅ Prevents multiple score updates
 
-  // ✅ Fix infinite loop by removing unnecessary dependencies
+  // Get past scores on mount
   useEffect(() => {
     getPastScores().then(setPastScores);
   }, []);
 
-  // ✅ Check Answer Function
+  // ✅ Check if answer is correct
   const checkAnswer = useCallback(() => {
-    if (QuizData[currentQuestion].type === "integer") {
-      return parseInt(integerAnswer) === QuizData[currentQuestion].answer;
-    } else {
-      return clickedOption === QuizData[currentQuestion].answer;
-    }
-  }, [integerAnswer, clickedOption, currentQuestion]);
+    const correctAnswer = QuizData[currentQuestion].answer;
+    return QuizData[currentQuestion].type === "integer"
+      ? parseInt(integerAnswer, 10) === correctAnswer
+      : clickedOption === correctAnswer;
+  }, [currentQuestion, clickedOption, integerAnswer]);
 
-  // ✅ Function to handle scoring (prevents multiple score additions)
-  const updateScore = useCallback(() => {
-    if (checkAnswer()) {
-      setScore(prevScore => prevScore + 1);
-    }
-  }, [checkAnswer]);
-
-  // ✅ Change Question Function (ensures score is updated only once)
+  // ✅ Function to move to the next question
   const changeQuestion = useCallback(() => {
-    if (answerChecked) {
-      updateScore();
+    if (answerChecked && !scoreUpdated) {
+      if (checkAnswer()) {
+        setScore((prevScore) => prevScore + 1);
+      }
+      setScoreUpdated(true); // ✅ Mark that score has been updated
     }
 
     if (currentQuestion < QuizData.length - 1) {
-      setCurrentQuestion(prev => prev + 1);
+      setCurrentQuestion((prev) => prev + 1);
       setClickedOption(null);
       setIntegerAnswer("");
       setTimeLeft(30);
       setAnswerChecked(false);
+      setScoreUpdated(false); // ✅ Reset score update flag for the next question
     } else {
       setShowResult(true);
-      saveScore(score, QuizData.length);
+      saveScore(score + (checkAnswer() ? 1 : 0), QuizData.length);
     }
-  }, [answerChecked, currentQuestion, score, updateScore]);
+  }, [answerChecked, checkAnswer, currentQuestion, score, scoreUpdated]);
 
-  // ✅ Fix Timer Loop Issue
+  // ✅ Timer countdown
   useEffect(() => {
     if (timeLeft === 0) {
       changeQuestion();
     }
 
     const timer = setInterval(() => {
-      setTimeLeft(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
+      setTimeLeft((prevTime) => (prevTime > 0 ? prevTime - 1 : 0));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, changeQuestion]);
 
-  // ✅ MCQ Click Handler
+  // ✅ Handle MCQ button click
   const handleMCQClick = (index) => {
     if (!answerChecked) {
       setClickedOption(index);
@@ -97,14 +100,14 @@ const Quiz = () => {
     }
   };
 
-  // ✅ Integer Answer Submit Handler
+  // ✅ Handle Integer question submit
   const handleIntegerSubmit = () => {
     if (!answerChecked && integerAnswer.trim() !== "") {
       setAnswerChecked(true);
     }
   };
 
-  // ✅ Reset Quiz
+  // ✅ Reset quiz
   const resetAll = () => {
     setShowResult(false);
     setCurrentQuestion(0);
@@ -113,6 +116,7 @@ const Quiz = () => {
     setScore(0);
     setTimeLeft(30);
     setAnswerChecked(false);
+    setScoreUpdated(false);
     getPastScores().then(setPastScores);
   };
 
@@ -127,6 +131,10 @@ const Quiz = () => {
               <QuizResult score={score} totalScore={QuizData.length} tryAgain={resetAll} />
 
               <h3>📊 Past Quiz Attempts</h3>
+              <button className="clear-history-btn" onClick={() => {
+                clearPastScores().then(() => getPastScores().then(setPastScores));
+              }}>Clear History</button>
+
               <ul className="past-scores">
                 {pastScores.map((attempt, index) => (
                   <li key={index}>
@@ -164,7 +172,7 @@ const Quiz = () => {
                     <button
                       key={i}
                       className={`btnq ${
-                        clickedOption !== null
+                        answerChecked
                           ? i === QuizData[currentQuestion].answer
                             ? 'correct'
                             : i === clickedOption
