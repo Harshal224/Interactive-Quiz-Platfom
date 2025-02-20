@@ -1,0 +1,131 @@
+.qbg {
+    background: #8b37d4;
+    padding-top: 100px;
+    padding-bottom: 100px;
+}
+
+.app {
+    background-color: #fff;
+    width: 90%;
+    max-width: 600px;
+    margin: 0 auto;
+    margin-bottom: 120px;
+    border-radius: 10px;
+    padding: 30px;
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.19);
+}
+
+.app h1 {
+    font-size: 25px;
+    color: #001e4d;
+    font-weight: 600;
+    border-bottom: 1px solid #333;
+    padding-bottom: 20px;
+}
+
+.quiz h2 {
+    font-size: 18px;
+    color: #001e4d;
+    font-weight: 600;
+}
+
+.btnq {
+    background-color: #fff;
+    color: #222;
+    font-weight: 500;
+    width: 100%;
+    border: 1px solid #222;
+    padding: 10px;
+    margin: 10px 0;
+    text-align: left;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btnq:hover:not([disabled]) {
+    background-color: #222;
+    color: #fff;
+}
+
+.btnq.correct {
+    background-color: #9aeabc !important;
+}
+
+.btnq.wrong {
+    background-color: #ff7f7f !important;
+}
+
+.feedback {
+    font-size: 18px;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+#next-btnq {
+    background: #001e4d;
+    color: #fff;
+    font-weight: 500;
+    width: 150px;
+    border: 0;
+    padding: 10px;
+    margin: 20px auto 0;
+    border-radius: 4px;
+    cursor: pointer;
+    display: block;
+}
+
+.result {
+    font-size: 20px;
+    color: #001e4d;
+}
+
+.timer {
+    font-size: 18px;
+    font-weight: bold;
+    color: red;
+    margin-bottom: 10px;
+}
+
+.past-scores {
+    margin-top: 20px;
+    padding: 10px;
+    background: #f8f8f8;
+    border-radius: 8px;
+}
+
+.past-scores ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.past-scores li {
+    padding: 5px;
+    font-size: 16px;
+}
+
+.correct {
+    background-color: #4caf50 !important; /* Green for correct answers */
+    color: white !important;
+}
+
+.wrong {
+    background-color: #f44336 !important; /* Red for wrong answers */
+    color: white !important;
+}
+
+.feedback {
+    font-size: 18px;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.integer-input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    border: 1px solid #222;
+    font-size: 16px;
+}
+
