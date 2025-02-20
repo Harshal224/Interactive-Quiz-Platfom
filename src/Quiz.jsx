@@ -1,36 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import './quiz1.css';
-import { QuizData } from './QuizData';
-import QuizResult from './QuizResult';
-import { openDB } from 'idb';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import "./quiz1.css";
+import { QuizData } from "./QuizData";
+import QuizResult from "./QuizResult";
+import { openDB } from "idb";
 
-// Initialize IndexedDB
+// ✅ Initialize IndexedDB
 const initDB = async () => {
-  return openDB('QuizDB', 1, {
+  return openDB("QuizDB", 1, {
     upgrade(db) {
-      if (!db.objectStoreNames.contains('quizHistory')) {
-        db.createObjectStore('quizHistory', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains("quizHistory")) {
+        db.createObjectStore("quizHistory", { keyPath: "id", autoIncrement: true });
       }
     },
   });
 };
 
-// Save Score to DB
+// ✅ Save score to database
 const saveScore = async (score, totalScore) => {
   const db = await initDB();
-  await db.add('quizHistory', { score, totalScore, date: new Date().toLocaleString() });
+  await db.add("quizHistory", { score, totalScore, date: new Date().toLocaleString() });
 };
 
-// Get past scores from DB
+// ✅ Get past scores
 const getPastScores = async () => {
   const db = await initDB();
-  return await db.getAll('quizHistory');
-};
-
-// Delete past scores manually
-const clearPastScores = async () => {
-  const db = await initDB();
-  await db.clear('quizHistory');
+  return await db.getAll("quizHistory");
 };
 
 const Quiz = () => {
@@ -42,14 +36,16 @@ const Quiz = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [pastScores, setPastScores] = useState([]);
   const [answerChecked, setAnswerChecked] = useState(false);
-  const [scoreUpdated, setScoreUpdated] = useState(false); // ✅ Prevents multiple score updates
+  const [scoreUpdated, setScoreUpdated] = useState(false);
 
-  // Get past scores on mount
+  const timerRef = useRef(null); // 🔹 Use ref for interval
+
+  // ✅ Fetch past scores on load
   useEffect(() => {
     getPastScores().then(setPastScores);
   }, []);
 
-  // ✅ Check if answer is correct
+  // ✅ Check Answer Logic
   const checkAnswer = useCallback(() => {
     const correctAnswer = QuizData[currentQuestion].answer;
     return QuizData[currentQuestion].type === "integer"
@@ -57,57 +53,46 @@ const Quiz = () => {
       : clickedOption === correctAnswer;
   }, [currentQuestion, clickedOption, integerAnswer]);
 
-  // ✅ Function to move to the next question
+  // ✅ Change Question & Prevent Continuous Updates
   const changeQuestion = useCallback(() => {
-    if (answerChecked && !scoreUpdated) {
-      if (checkAnswer()) {
-        setScore((prevScore) => prevScore + 1);
+    if (!answerChecked || scoreUpdated) return;
+
+    if (checkAnswer()) {
+      setScore((prev) => prev + 1);
+    }
+
+    setScoreUpdated(true); // Prevents multiple updates
+
+    setTimeout(() => {
+      if (currentQuestion < QuizData.length - 1) {
+        setCurrentQuestion((prev) => prev + 1);
+        setClickedOption(null);
+        setIntegerAnswer("");
+        setTimeLeft(30);
+        setAnswerChecked(false);
+        setScoreUpdated(false);
+      } else {
+        setShowResult(true);
+        saveScore(score, QuizData.length);
       }
-      setScoreUpdated(true); // ✅ Mark that score has been updated
-    }
+    }, 300);
+  }, [answerChecked, checkAnswer, currentQuestion, scoreUpdated, score]);
 
-    if (currentQuestion < QuizData.length - 1) {
-      setCurrentQuestion((prev) => prev + 1);
-      setClickedOption(null);
-      setIntegerAnswer("");
-      setTimeLeft(30);
-      setAnswerChecked(false);
-      setScoreUpdated(false); // ✅ Reset score update flag for the next question
-    } else {
-      setShowResult(true);
-      saveScore(score + (checkAnswer() ? 1 : 0), QuizData.length);
-    }
-  }, [answerChecked, checkAnswer, currentQuestion, score, scoreUpdated]);
-
-  // ✅ Timer countdown
+  // ✅ Timer Functionality
   useEffect(() => {
     if (timeLeft === 0) {
       changeQuestion();
+      return;
     }
 
-    const timer = setInterval(() => {
-      setTimeLeft((prevTime) => (prevTime > 0 ? prevTime - 1 : 0));
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => clearInterval(timerRef.current);
   }, [timeLeft, changeQuestion]);
 
-  // ✅ Handle MCQ button click
-  const handleMCQClick = (index) => {
-    if (!answerChecked) {
-      setClickedOption(index);
-      setAnswerChecked(true);
-    }
-  };
-
-  // ✅ Handle Integer question submit
-  const handleIntegerSubmit = () => {
-    if (!answerChecked && integerAnswer.trim() !== "") {
-      setAnswerChecked(true);
-    }
-  };
-
-  // ✅ Reset quiz
+  // ✅ Reset Quiz
   const resetAll = () => {
     setShowResult(false);
     setCurrentQuestion(0);
@@ -120,8 +105,17 @@ const Quiz = () => {
     getPastScores().then(setPastScores);
   };
 
+  // ✅ Delete Past Scores from IndexedDB
+  const deleteScores = async () => {
+    const db = await initDB();
+    const tx = db.transaction("quizHistory", "readwrite");
+    const store = tx.objectStore("quizHistory");
+    await store.clear();
+    setPastScores([]);
+  };
+
   return (
-    <div className='qbg'>
+    <div className="qbg">
       <div className="app">
         <h1>Java Quiz</h1>
 
@@ -131,10 +125,6 @@ const Quiz = () => {
               <QuizResult score={score} totalScore={QuizData.length} tryAgain={resetAll} />
 
               <h3>📊 Past Quiz Attempts</h3>
-              <button className="clear-history-btn" onClick={() => {
-                clearPastScores().then(() => getPastScores().then(setPastScores));
-              }}>Clear History</button>
-
               <ul className="past-scores">
                 {pastScores.map((attempt, index) => (
                   <li key={index}>
@@ -142,6 +132,10 @@ const Quiz = () => {
                   </li>
                 ))}
               </ul>
+
+              <button className="btnq delete-btn" onClick={deleteScores}>
+                🗑️ Clear Score History
+              </button>
             </>
           ) : (
             <>
@@ -161,7 +155,7 @@ const Quiz = () => {
                     />
                     <button
                       className="btnq"
-                      onClick={handleIntegerSubmit}
+                      onClick={() => setAnswerChecked(true)}
                       disabled={integerAnswer.trim() === ""}
                     >
                       Submit Answer
@@ -172,15 +166,20 @@ const Quiz = () => {
                     <button
                       key={i}
                       className={`btnq ${
-                        answerChecked
+                        clickedOption !== null
                           ? i === QuizData[currentQuestion].answer
-                            ? 'correct'
+                            ? "correct"
                             : i === clickedOption
-                            ? 'wrong'
-                            : ''
-                          : ''
+                            ? "wrong"
+                            : ""
+                          : ""
                       }`}
-                      onClick={() => handleMCQClick(i)}
+                      onClick={() => {
+                        if (!answerChecked) {
+                          setClickedOption(i);
+                          setAnswerChecked(true);
+                        }
+                      }}
                       disabled={answerChecked}
                     >
                       {option}
@@ -195,7 +194,7 @@ const Quiz = () => {
                 </p>
               )}
 
-              <button id='next-btnq' onClick={changeQuestion} disabled={!answerChecked}>
+              <button id="next-btnq" onClick={changeQuestion} disabled={!answerChecked}>
                 Next
               </button>
             </>
