@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './quiz1.css';
 import { QuizData } from './QuizData';
 import QuizResult from './QuizResult';
 import { openDB } from 'idb';
-import { useCallback } from 'react';
 
-
-// Initialize IndexedDB for storing past quiz scores
+// Initialize IndexedDB
 const initDB = async () => {
   return openDB('QuizDB', 1, {
     upgrade(db) {
@@ -17,13 +15,13 @@ const initDB = async () => {
   });
 };
 
-// Save quiz attempt to IndexedDB
+// Save Score to IndexedDB
 const saveScore = async (score, totalScore) => {
   const db = await initDB();
   await db.add('quizHistory', { score, totalScore, date: new Date().toLocaleString() });
 };
 
-// Retrieve past quiz attempts
+// Retrieve Past Scores
 const getPastScores = async () => {
   const db = await initDB();
   return await db.getAll('quizHistory');
@@ -33,63 +31,65 @@ const Quiz = () => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [clickedOption, setClickedOption] = useState(null);
-  const [integerAnswer, setIntegerAnswer] = useState(""); // For integer-type questions
+  const [integerAnswer, setIntegerAnswer] = useState(""); // For integer questions
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [pastScores, setPastScores] = useState([]);
-  const [answerChecked, setAnswerChecked] = useState(false); // Prevents multiple selections
+  const [answerChecked, setAnswerChecked] = useState(false);
 
-
-  const changeQuestion = useCallback(() => {
-    if (clickedOption !== null) {
-      updateScore();
-    }
-  
-    if (currentQuestion < QuizData.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-      setClickedOption(null);
-      setTimeLeft(30);
-      setAnswerChecked(false);
-    } else {
-      setShowResult(true);
-      saveScore(score + (clickedOption === QuizData[currentQuestion].answer ? 1 : 0), QuizData.length);
-    }
-  }, [clickedOption, currentQuestion, score]);  
-  
-  
-  useEffect(() => {
-    if (timeLeft === 0) {
-      changeQuestion();
-    }
-  
-    const timer = setInterval(() => {
-      setTimeLeft((prevTime) => (prevTime > 0 ? prevTime - 1 : 0));
-    }, 1000);
-  
-    return () => clearInterval(timer);
-  }, [timeLeft, changeQuestion]);  
-  
-  
-
+  // ✅ Fix infinite loop by removing unnecessary dependencies
   useEffect(() => {
     getPastScores().then(setPastScores);
   }, []);
 
-
-
-  const updateScore = () => {
-    if (checkAnswer()) {
-      setScore(score + 1);
+  // ✅ Check Answer Function
+  const checkAnswer = useCallback(() => {
+    if (QuizData[currentQuestion].type === "integer") {
+      return parseInt(integerAnswer) === QuizData[currentQuestion].answer;
+    } else {
+      return clickedOption === QuizData[currentQuestion].answer;
     }
-  };
+  }, [integerAnswer, clickedOption, currentQuestion]);
 
-  const checkAnswer = () => {
-    const correctAnswer = QuizData[currentQuestion].answer;
-    return QuizData[currentQuestion].type === "integer"
-      ? parseInt(integerAnswer) === correctAnswer
-      : clickedOption === correctAnswer;
-  };
+  // ✅ Function to handle scoring (prevents multiple score additions)
+  const updateScore = useCallback(() => {
+    if (checkAnswer()) {
+      setScore(prevScore => prevScore + 1);
+    }
+  }, [checkAnswer]);
 
+  // ✅ Change Question Function (ensures score is updated only once)
+  const changeQuestion = useCallback(() => {
+    if (answerChecked) {
+      updateScore();
+    }
+
+    if (currentQuestion < QuizData.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+      setClickedOption(null);
+      setIntegerAnswer("");
+      setTimeLeft(30);
+      setAnswerChecked(false);
+    } else {
+      setShowResult(true);
+      saveScore(score, QuizData.length);
+    }
+  }, [answerChecked, currentQuestion, score, updateScore]);
+
+  // ✅ Fix Timer Loop Issue
+  useEffect(() => {
+    if (timeLeft === 0) {
+      changeQuestion();
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft]);
+
+  // ✅ MCQ Click Handler
   const handleMCQClick = (index) => {
     if (!answerChecked) {
       setClickedOption(index);
@@ -97,12 +97,14 @@ const Quiz = () => {
     }
   };
 
+  // ✅ Integer Answer Submit Handler
   const handleIntegerSubmit = () => {
     if (!answerChecked && integerAnswer.trim() !== "") {
       setAnswerChecked(true);
     }
   };
 
+  // ✅ Reset Quiz
   const resetAll = () => {
     setShowResult(false);
     setCurrentQuestion(0);
