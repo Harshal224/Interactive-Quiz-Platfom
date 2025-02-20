@@ -4,7 +4,7 @@ import { QuizData } from "./QuizData";
 import QuizResult from "./QuizResult";
 import { openDB } from "idb";
 
-// ✅ Initialize IndexedDB
+// ✅ Initialize IndexedDB for storing past quiz scores
 const initDB = async () => {
   return openDB("QuizDB", 1, {
     upgrade(db) {
@@ -15,13 +15,13 @@ const initDB = async () => {
   });
 };
 
-// ✅ Save score to database
+// ✅ Save quiz attempt to IndexedDB
 const saveScore = async (score, totalScore) => {
   const db = await initDB();
   await db.add("quizHistory", { score, totalScore, date: new Date().toLocaleString() });
 };
 
-// ✅ Get past scores
+// ✅ Retrieve past quiz attempts
 const getPastScores = async () => {
   const db = await initDB();
   return await db.getAll("quizHistory");
@@ -36,32 +36,58 @@ const Quiz = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [pastScores, setPastScores] = useState([]);
   const [answerChecked, setAnswerChecked] = useState(false);
-  const [scoreUpdated, setScoreUpdated] = useState(false);
+  const [scoreUpdated, setScoreUpdated] = useState(false); // ✅ Prevents multiple score updates
+  const timerRef = useRef(null);
 
-  const timerRef = useRef(null); // 🔹 Use ref for interval
-
-  // ✅ Fetch past scores on load
+  // ✅ Fetch past scores on mount
   useEffect(() => {
     getPastScores().then(setPastScores);
   }, []);
 
-  // ✅ Check Answer Logic
+  // ✅ Check if the user's answer is correct
   const checkAnswer = useCallback(() => {
     const correctAnswer = QuizData[currentQuestion].answer;
     return QuizData[currentQuestion].type === "integer"
-      ? parseInt(integerAnswer, 10) === correctAnswer
+      ? parseInt(integerAnswer) === correctAnswer
       : clickedOption === correctAnswer;
   }, [currentQuestion, clickedOption, integerAnswer]);
 
-  // ✅ Change Question & Prevent Continuous Updates
+  // ✅ Timer - Prevents awarding marks on timeout
+  useEffect(() => {
+    if (timeLeft === 0) {
+      setTimeout(() => {
+        setAnswerChecked(false);
+        setScoreUpdated(false);
+
+        if (currentQuestion < QuizData.length - 1) {
+          setCurrentQuestion((prev) => prev + 1);
+          setClickedOption(null);
+          setIntegerAnswer("");
+          setTimeLeft(30);
+        } else {
+          setShowResult(true);
+          saveScore(score, QuizData.length);
+        }
+      }, 500);
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [timeLeft, currentQuestion, score]);
+
+  // ✅ Move to the next question (prevents multiple score updates)
   const changeQuestion = useCallback(() => {
     if (!answerChecked || scoreUpdated) return;
 
-    if (checkAnswer()) {
+    if (answerChecked && checkAnswer()) {
       setScore((prev) => prev + 1);
     }
 
-    setScoreUpdated(true); // Prevents multiple updates
+    setScoreUpdated(true);
 
     setTimeout(() => {
       if (currentQuestion < QuizData.length - 1) {
@@ -78,19 +104,20 @@ const Quiz = () => {
     }, 300);
   }, [answerChecked, checkAnswer, currentQuestion, scoreUpdated, score]);
 
-  // ✅ Timer Functionality
-  useEffect(() => {
-    if (timeLeft === 0) {
-      changeQuestion();
-      return;
+  // ✅ Handle MCQ Click
+  const handleMCQClick = (index) => {
+    if (!answerChecked) {
+      setClickedOption(index);
+      setAnswerChecked(true);
     }
+  };
 
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-
-    return () => clearInterval(timerRef.current);
-  }, [timeLeft, changeQuestion]);
+  // ✅ Handle Integer Answer Submit
+  const handleIntegerSubmit = () => {
+    if (!answerChecked && integerAnswer.trim() !== "") {
+      setAnswerChecked(true);
+    }
+  };
 
   // ✅ Reset Quiz
   const resetAll = () => {
@@ -103,15 +130,6 @@ const Quiz = () => {
     setAnswerChecked(false);
     setScoreUpdated(false);
     getPastScores().then(setPastScores);
-  };
-
-  // ✅ Delete Past Scores from IndexedDB
-  const deleteScores = async () => {
-    const db = await initDB();
-    const tx = db.transaction("quizHistory", "readwrite");
-    const store = tx.objectStore("quizHistory");
-    await store.clear();
-    setPastScores([]);
   };
 
   return (
@@ -132,10 +150,6 @@ const Quiz = () => {
                   </li>
                 ))}
               </ul>
-
-              <button className="btnq delete-btn" onClick={deleteScores}>
-                🗑️ Clear Score History
-              </button>
             </>
           ) : (
             <>
@@ -155,7 +169,7 @@ const Quiz = () => {
                     />
                     <button
                       className="btnq"
-                      onClick={() => setAnswerChecked(true)}
+                      onClick={handleIntegerSubmit}
                       disabled={integerAnswer.trim() === ""}
                     >
                       Submit Answer
@@ -174,12 +188,7 @@ const Quiz = () => {
                             : ""
                           : ""
                       }`}
-                      onClick={() => {
-                        if (!answerChecked) {
-                          setClickedOption(i);
-                          setAnswerChecked(true);
-                        }
-                      }}
+                      onClick={() => handleMCQClick(i)}
                       disabled={answerChecked}
                     >
                       {option}
