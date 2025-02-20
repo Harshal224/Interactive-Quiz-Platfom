@@ -37,22 +37,6 @@ const Quiz = () => {
   const [pastScores, setPastScores] = useState([]);
   const [answerChecked, setAnswerChecked] = useState(false); // Prevents multiple selections
 
-  useEffect(() => {
-    if (timeLeft === 0) {
-      changeQuestion();
-    }
-
-    const timer = setInterval(() => {
-      setTimeLeft((prevTime) => (prevTime > 0 ? prevTime - 1 : 0));
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft]);
-
-  useEffect(() => {
-    getPastScores().then(setPastScores);
-  }, []);
-
   const changeQuestion = () => {
     if (!answerChecked) return; // Prevent skipping without answering
 
@@ -69,6 +53,25 @@ const Quiz = () => {
       saveScore(score + (checkAnswer() ? 1 : 0), QuizData.length);
     }
   };
+
+  useEffect(() => {
+    if (timeLeft === 0) {
+      changeQuestion();
+    }
+  
+    const timer = setInterval(() => {
+      setTimeLeft((prevTime) => (prevTime > 0 ? prevTime - 1 : 0));
+    }, 1000);
+  
+    return () => clearInterval(timer);
+  }, [timeLeft, changeQuestion]);  
+  
+
+  useEffect(() => {
+    getPastScores().then(setPastScores);
+  }, []);
+
+
 
   const updateScore = () => {
     if (checkAnswer()) {
